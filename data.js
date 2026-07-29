@@ -453,14 +453,14 @@ function computeAggregates(records) {
     if (!coloniasDetalle[key]) coloniasDetalle[key] = { municipio: r.municipio, colonia: r.colonia, count: 0 };
     coloniasDetalle[key].count++;
   });
-  const topColoniasDetalle = Object.values(coloniasDetalle).sort((a,b)=>b.count-a.count).slice(0,10);
+  const topColoniasDetalle = Object.values(coloniasDetalle).sort((a,b)=>b.count-a.count).slice(0,15);
   // Formato [nombre, valor] para reutilizar la gráfica de barras genérica.
   const topColonias = topColoniasDetalle.map(d => [`${d.colonia} — ${d.municipio}`, d.count]);
 
   // Sectores
   const sectores = {};
   records.forEach(r => { sectores[r.sector] = (sectores[r.sector] || 0) + 1; });
-  const topSectores = Object.entries(sectores).sort((a,b)=>b[1]-a[1]);
+  const topSectores = Object.entries(sectores).sort((a,b)=>b[1]-a[1]).slice(0,15);
 
   // Marcas / submarcas
   const marcas = {};
@@ -587,6 +587,39 @@ function computeAggregates(records) {
    usuario tenga filtrado — o, si no filtró un mes específico, el mes más
    reciente disponible en los datos.
    ------------------------------------------------------------------------- */
+function diasEnMes(anio, mesNombre) {
+  const idx = MESES_ORDEN.indexOf(mesNombre);
+  if (idx === -1) return 31;
+  return new Date(anio, idx + 1, 0).getDate();
+}
+
+// Determina el "período de referencia" (mes+año) y el mes inmediato anterior,
+// con el mismo criterio en todas las comparativas mes-a-mes del dashboard:
+// el mes+año que el usuario tenga filtrado, o el más reciente disponible en
+// los datos (respetando filtros base como delito/violencia) si no filtró uno.
+function determinarPeriodoReferencia(allRecords, filters, pasaFiltroBase) {
+  let refAnio = filters.anio, refMes = filters.mes;
+  if (refMes === "all" || refAnio === "all") {
+    let latest = null;
+    allRecords.forEach(r => {
+      if (!pasaFiltroBase(r) || !r.anio || !r.mes) return;
+      const idx = MESES_ORDEN.indexOf(r.mes);
+      if (!latest || r.anio > latest.anio || (r.anio === latest.anio && idx > latest.idx)) {
+        latest = { anio: r.anio, mes: r.mes, idx };
+      }
+    });
+    if (!latest) return null;
+    refAnio = latest.anio; refMes = latest.mes;
+  } else {
+    refAnio = parseInt(refAnio, 10);
+  }
+  const refIdx = MESES_ORDEN.indexOf(refMes);
+  let prevMes, prevAnio;
+  if (refIdx > 0) { prevMes = MESES_ORDEN[refIdx - 1]; prevAnio = refAnio; }
+  else { prevMes = MESES_ORDEN[11]; prevAnio = refAnio - 1; }
+  return { refAnio, refMes, prevAnio, prevMes };
+}
+
 function computeAnomalias(allRecords, filters) {
   const pasaFiltroBase = r => {
     if (filters.delito !== "all" && r.delitoEst !== filters.delito) return false;
@@ -607,22 +640,9 @@ function computeAnomalias(allRecords, filters) {
     seriePorMunicipio[key][periodo] = (seriePorMunicipio[key][periodo] || 0) + 1;
   });
 
-  // Determina el período de referencia.
-  let refAnio = filters.anio, refMes = filters.mes;
-  if (refMes === "all" || refAnio === "all") {
-    let latest = null;
-    allRecords.forEach(r => {
-      if (!pasaFiltroBase(r) || !r.anio || !r.mes) return;
-      const idx = MESES_ORDEN.indexOf(r.mes);
-      if (!latest || r.anio > latest.anio || (r.anio === latest.anio && idx > latest.idx)) {
-        latest = { anio: r.anio, mes: r.mes, idx };
-      }
-    });
-    if (!latest) return { disponible: false, items: [], periodoRef: null };
-    refAnio = latest.anio; refMes = latest.mes;
-  } else {
-    refAnio = parseInt(refAnio, 10);
-  }
+  const periodo = determinarPeriodoReferencia(allRecords, filters, pasaFiltroBase);
+  if (!periodo) return { disponible: false, items: [], periodoRef: null };
+  const { refAnio, refMes } = periodo;
 
   const refKey = `${refAnio}-${refMes}`;
   const items = [];
@@ -645,13 +665,153 @@ function computeAnomalias(allRecords, filters) {
   return { disponible: items.length > 0, items: items.slice(0, 5), periodoRef: { anio: refAnio, mes: refMes } };
 }
 
-// Namespace global simple para que main.js / charts.js / map.js consuman lo mismo.
-window.CGES = window.CGES || {};
+/* -------------------------------------------------------------------------
+   Comparativo mes a mes por municipio (los 9 del AMG), ordenado por orden de
+   impacto — complementa computeAnomalias(): mientras esa función compara
+   cada municipio contra SU PROPIO historial (detección estadística), esta
+   función da la lectura más literal y directa que pidió el usuario: "qué
+   pasó este mes vs. el mes pasado, en cada uno de los 9 municipios".
+
+   "Orden de impacto" = magnitud absoluta del cambio en número de eventos
+   (no en %), porque un incremento de 40 eventos importa operativamente más
+   que uno de 200% que parte de una base de 2 eventos.
+   ------------------------------------------------------------------------- */
+const MUNICIPIOS_AMG_CATALOGO = Object.keys(POBLACION_MUNICIPIOS_RAW);
+
+function computeComparativoMunicipiosMoM(allRecords, filters) {
+  const pasaFiltroBase = r => {
+    if (filters.delito !== "all" && r.delitoEst !== filters.delito) return false;
+    if (filters.violencia !== "all") {
+      const wantViolence = filters.violencia === "con";
+      if (r.conViolencia !== wantViolence) return false;
+    }
+    return true;
+  };
+
+  const periodo = determinarPeriodoReferencia(allRecords, filters, pasaFiltroBase);
+  if (!periodo) return { disponible: false, items: [], periodoRef: null, periodoAnterior: null };
+  const { refAnio, refMes, prevAnio, prevMes } = periodo;
+
+  const items = MUNICIPIOS_AMG_CATALOGO.map(nombreCanonico => {
+    const claveCanon = normalizarClaveMunicipio(nombreCanonico);
+    let actual = 0, anterior = 0;
+    allRecords.forEach(r => {
+      if (!pasaFiltroBase(r) || !r.anio || !r.mes || !r.municipioGeo) return;
+      if (normalizarClaveMunicipio(r.municipioGeo) !== claveCanon) return;
+      if (r.anio === refAnio && r.mes === refMes) actual++;
+      else if (r.anio === prevAnio && r.mes === prevMes) anterior++;
+    });
+    const delta = actual - anterior;
+    const deltaPct = anterior > 0 ? Math.round((delta / anterior) * 100) : (actual > 0 ? null : 0);
+    return { municipio: nombreCanonico, actual, anterior, delta, deltaPct };
+  });
+
+  // Orden de impacto: magnitud absoluta del cambio, no porcentaje.
+  items.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+  return {
+    disponible: true,
+    items,
+    periodoRef: { anio: refAnio, mes: refMes },
+    periodoAnterior: { anio: prevAnio, mes: prevMes },
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Comparativo mes a mes por COLONIA y por SECTOR (usado en las tablas de
+   ranking de la sección "Colonias y sectores"), con metodología adaptativa:
+
+   - Si el mes de referencia ya está completo (el día más tardío capturado en
+     los datos coincide con el total de días de ese mes), compara mes
+     completo contra mes completo.
+   - Si el mes de referencia sigue en curso (aún no se han capturado todos
+     sus días), compara "Month-to-Date" (MTD): los mismos primeros N días del
+     mes de referencia contra los primeros N días del mes anterior — evita
+     que un mes a medias parezca (falsamente) una mejora frente a un mes ya
+     completo. N se limita también a los días que realmente tenga el mes
+     anterior (ej. Febrero vs Marzo).
+
+   Esta detección es automática (no requiere configurarse a mano) y se
+   recalcula cada vez que el Sheet tenga más días capturados.
+   ------------------------------------------------------------------------- */
+function computeComparativoDetallado(allRecords, filters) {
+  const pasaFiltroBase = r => {
+    if (filters.delito !== "all" && r.delitoEst !== filters.delito) return false;
+    if (filters.violencia !== "all") {
+      const wantViolence = filters.violencia === "con";
+      if (r.conViolencia !== wantViolence) return false;
+    }
+    return true;
+  };
+
+  const periodo = determinarPeriodoReferencia(allRecords, filters, pasaFiltroBase);
+  if (!periodo) return { disponible: false, porColonia: {}, porSector: {} };
+  const { refAnio, refMes, prevAnio, prevMes } = periodo;
+
+  // Detección de mes completo vs. en curso, a partir del día más tardío
+  // realmente capturado en el mes de referencia.
+  const totalDiasRef = diasEnMes(refAnio, refMes);
+  let corteDia = 0;
+  allRecords.forEach(r => {
+    if (!pasaFiltroBase(r) || r.anio !== refAnio || r.mes !== refMes || !r.fecha) return;
+    const dia = r.fecha.getDate();
+    if (dia > corteDia) corteDia = dia;
+  });
+  const esCompleto = corteDia >= totalDiasRef;
+  const corteEfectivo = esCompleto ? null : Math.min(corteDia, diasEnMes(prevAnio, prevMes));
+
+  function dentroDelCorte(r) {
+    if (esCompleto) return true;
+    if (!r.fecha) return false;
+    return r.fecha.getDate() <= corteEfectivo;
+  }
+
+  const porColonia = {};
+  const porSector = {};
+  allRecords.forEach(r => {
+    if (!pasaFiltroBase(r)) return;
+    const esRef = r.anio === refAnio && r.mes === refMes;
+    const esPrev = r.anio === prevAnio && r.mes === prevMes;
+    if (!esRef && !esPrev) return;
+    if (!dentroDelCorte(r)) return;
+
+    const keyColonia = `${r.municipio}|||${r.colonia}`;
+    porColonia[keyColonia] = porColonia[keyColonia] || { actual: 0, anterior: 0 };
+    if (esRef) porColonia[keyColonia].actual++; else porColonia[keyColonia].anterior++;
+
+    const keySector = r.sector || "SIN DATO";
+    porSector[keySector] = porSector[keySector] || { actual: 0, anterior: 0 };
+    if (esRef) porSector[keySector].actual++; else porSector[keySector].anterior++;
+  });
+
+  function finalizar(obj) {
+    const out = {};
+    Object.entries(obj).forEach(([k, v]) => {
+      const delta = v.actual - v.anterior;
+      const deltaPct = v.anterior > 0 ? Math.round((delta / v.anterior) * 100) : (v.actual > 0 ? null : 0);
+      out[k] = { actual: v.actual, anterior: v.anterior, delta, deltaPct };
+    });
+    return out;
+  }
+
+  return {
+    disponible: true,
+    porColonia: finalizar(porColonia),
+    porSector: finalizar(porSector),
+    periodoRef: { anio: refAnio, mes: refMes },
+    periodoAnterior: { anio: prevAnio, mes: prevMes },
+    esCompleto,
+    corteDia: esCompleto ? totalDiasRef : corteDia,
+    totalDiasRef,
+  };
+}
 window.CGES.APP_CONFIG = APP_CONFIG;
 window.CGES.SENSITIVE_COLUMNS = SENSITIVE_COLUMNS;
 window.CGES.loadDataset = loadDataset;
 window.CGES.computeAggregates = computeAggregates;
 window.CGES.computeAnomalias = computeAnomalias;
+window.CGES.computeComparativoMunicipiosMoM = computeComparativoMunicipiosMoM;
+window.CGES.computeComparativoDetallado = computeComparativoDetallado;
 window.CGES.poblacionDeMunicipio = poblacionDeMunicipio;
 window.CGES.MESES_ORDEN = MESES_ORDEN;
 window.CGES.DIAS_ORDEN = DIAS_ORDEN;

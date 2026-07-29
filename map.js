@@ -6,9 +6,10 @@
    ========================================================================= */
 
 let LEAFLET_MAP = null;
-let MARKERS_LAYER = null;
-let HEAT_LAYER = null;
-let MAP_VIEW = "points"; // Opción 3: "points" | "heat"
+let MARKERS_LAYER = null;   // vista "points": individuales, sin agrupar (detalle caso por caso)
+let CLUSTER_LAYER = null;   // vista "cluster": agrupados por zona/zoom (vista operativa/táctica)
+let HEAT_LAYER = null;      // vista "heat": mapa de calor por intensidad (vista ejecutiva)
+let MAP_VIEW = "heat";      // pre-seleccionado, según lo solicitado
 
 // Municipios del AMG (idéntico al listado documentado en CAPAS_MAPA_COMPLETO.md)
 const MUNICIPIOS_AMG = [
@@ -77,11 +78,21 @@ function initMap() {
   return LEAFLET_MAP;
 }
 
-// Opción 3 — Mapa de calor (benchmark: Palantir Gotham, C4 Bogotá, C5 CDMX):
-// alterna entre puntos individuales (útil para inspeccionar un evento) y una
-// capa de intensidad por concentración (útil para un vistazo ejecutivo de 2
-// segundos: "¿dónde está el problema?"). Usa las mismas coordenadas lat/lon
-// ya reproyectadas — no requiere ningún cálculo de datos adicional.
+// Ícono circular coloreado (mismo estilo visual que los circleMarker de la
+// vista "Puntos") para usarse dentro de L.markerClusterGroup, que requiere
+// L.marker (no L.circleMarker) para poder agrupar/expandir correctamente.
+function makeColoredDivIcon(color) {
+  return L.divIcon({
+    className: "cges-point-icon",
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 2px rgba(0,0,0,.45);"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+}
+
+// Vista "Mapa de calor" (benchmark: Palantir Gotham, C4 Bogotá, C5 CDMX):
+// vistazo ejecutivo de 2 segundos de "dónde está el problema". Usa las
+// mismas coordenadas lat/lon ya reproyectadas — no requiere cálculo extra.
 function buildHeatLayer(withGeo) {
   if (typeof L.heatLayer !== "function") return null; // plugin no cargó (ver index.html)
   const points = withGeo.map(r => [r.lat, r.lon, 0.55]);
@@ -93,27 +104,52 @@ function buildHeatLayer(withGeo) {
   return HEAT_LAYER;
 }
 
-function applyMapView() {
-  if (!LEAFLET_MAP) return;
-  if (MAP_VIEW === "heat" && HEAT_LAYER) {
-    if (LEAFLET_MAP.hasLayer(MARKERS_LAYER)) LEAFLET_MAP.removeLayer(MARKERS_LAYER);
-    if (!LEAFLET_MAP.hasLayer(HEAT_LAYER)) HEAT_LAYER.addTo(LEAFLET_MAP);
-  } else {
-    if (HEAT_LAYER && LEAFLET_MAP.hasLayer(HEAT_LAYER)) LEAFLET_MAP.removeLayer(HEAT_LAYER);
-    if (!LEAFLET_MAP.hasLayer(MARKERS_LAYER)) MARKERS_LAYER.addTo(LEAFLET_MAP);
-  }
+// Vista "Clusters" (vista operativa/táctica: cuántos eventos por zona, con
+// zoom para "explotar" el grupo). Íconos re-estilizados en paleta CGES
+// (navy/naranja) en vez de los colores default verde/amarillo/rojo de la
+// librería, para que se vea consistente con el resto del dashboard.
+function buildClusterLayer(withGeo) {
+  if (typeof L.markerClusterGroup !== "function") return null; // plugin no cargó
+  if (CLUSTER_LAYER) LEAFLET_MAP.removeLayer(CLUSTER_LAYER);
+  CLUSTER_LAYER = L.markerClusterGroup({
+    iconCreateFunction: cluster => {
+      const count = cluster.getChildCount();
+      const size = count < 10 ? 32 : count < 50 ? 40 : 48;
+      return L.divIcon({
+        html: `<div style="background:#13294B; color:#fff; width:${size}px; height:${size}px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; font-family:Inter,sans-serif; border:2px solid #F5821F; box-shadow:0 2px 8px rgba(0,0,0,.3);">${count}</div>`,
+        className: "cges-cluster-icon",
+        iconSize: L.point(size, size),
+      });
+    },
+  });
+  withGeo.forEach(r => {
+    const marker = L.marker([r.lat, r.lon], { icon: makeColoredDivIcon(markerColor(r)) });
+    marker.bindPopup(popupHtml(r));
+    CLUSTER_LAYER.addLayer(marker);
+  });
+  return CLUSTER_LAYER;
 }
 
+function applyMapView() {
+  if (!LEAFLET_MAP) return;
+  [MARKERS_LAYER, CLUSTER_LAYER, HEAT_LAYER].forEach(layer => {
+    if (layer && LEAFLET_MAP.hasLayer(layer)) LEAFLET_MAP.removeLayer(layer);
+  });
+  if (MAP_VIEW === "heat" && HEAT_LAYER) HEAT_LAYER.addTo(LEAFLET_MAP);
+  else if (MAP_VIEW === "cluster" && CLUSTER_LAYER) CLUSTER_LAYER.addTo(LEAFLET_MAP);
+  else if (MARKERS_LAYER) MARKERS_LAYER.addTo(LEAFLET_MAP);
+}
+
+// Control flotante de 3 opciones dentro del propio mapa (radio buttons —
+// solo una vista puede estar activa a la vez — presentados como un
+// segmentado de 3 opciones).
 function wireMapViewToggle() {
-  const toggle = document.getElementById("map-view-toggle");
-  if (!toggle || toggle.dataset.wired) return;
-  toggle.dataset.wired = "1";
-  toggle.querySelectorAll(".pill-toggle-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      toggle.querySelectorAll(".pill-toggle-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      MAP_VIEW = btn.dataset.mapView;
-      applyMapView();
+  const control = document.getElementById("map-view-control");
+  if (!control || control.dataset.wired) return;
+  control.dataset.wired = "1";
+  control.querySelectorAll('input[name="map-view"]').forEach(input => {
+    input.addEventListener("change", () => {
+      if (input.checked) { MAP_VIEW = input.value; applyMapView(); }
     });
   });
 }
@@ -172,6 +208,7 @@ function renderMapMarkers(records) {
   }
 
   buildHeatLayer(withGeo);
+  buildClusterLayer(withGeo);
   applyMapView();
 
   if (withGeo.length) {

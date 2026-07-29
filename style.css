@@ -90,18 +90,6 @@ img{max-width:100%;display:block;}
 }
 .cges-replay{ animation: cgesPulseIn .55s ease; }
 
-/* Toggle tipo "pill" reutilizable (Opción 1: tasa por 100k hab. / Opción 3: mapa de calor) */
-.pill-toggle{
-  display:inline-flex; gap:2px; background:var(--gray-bg); border:1px solid var(--gray-line);
-  border-radius:999px; padding:3px; margin:10px 0;
-}
-.pill-toggle-btn{
-  border:none; background:transparent; padding:6px 14px; border-radius:999px;
-  font-size:12px; font-weight:600; color:var(--gray-text); cursor:pointer; transition:background .15s, color .15s;
-}
-.pill-toggle-btn.active{ background:var(--navy); color:#fff; }
-.pill-toggle-btn:hover:not(.active){ background:var(--gray-card); }
-
 /* ---------- Header / Portada ---------- */
 header.hero{
   position:relative;
@@ -338,6 +326,20 @@ table.heatmap td.total{background:var(--navy); color:#fff; font-weight:700;}
   background:var(--navy); color:#fff; border-radius:999px; padding:6px 14px; font-size:12.5px;
 }
 .map-note{padding:12px 18px; font-size:12px; color:var(--gray-text); border-top:1px solid var(--gray-card);}
+
+.map-view-control{
+  position:absolute; top:18px; right:18px; z-index:500;
+  background:rgba(255,255,255,.94); border-radius:10px; padding:10px 14px;
+  font-size:12.5px; box-shadow:0 4px 14px rgba(0,0,0,.18);
+}
+.map-view-control-title{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--gray-text);
+  font-weight:700; margin-bottom:6px;
+}
+.map-view-control label{
+  display:flex; align-items:center; gap:6px; cursor:pointer; padding:3px 0; color:var(--ink);
+}
+.map-view-control input{ accent-color:var(--orange); cursor:pointer; }
 
 /* ---------- Footer ---------- */
 footer{

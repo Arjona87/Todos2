@@ -209,25 +209,22 @@
     <div class="card" style="margin-bottom:18px;" id="card-top-municipios">
       <h3>Top municipios</h3>
       <div class="card-sub">Calculado a partir de la columna geocodificada "MunicipioG" (con respaldo en "MUNICIPIO" si aún no está disponible en la fuente).</div>
-      <div class="pill-toggle" id="municipios-rate-toggle">
-        <button class="pill-toggle-btn active" data-rate-view="absoluto">Cifras absolutas</button>
-        <button class="pill-toggle-btn" data-rate-view="tasa">Tasa por 100k hab.</button>
-      </div>
       <div class="chart-box tall" id="chart-municipios"></div>
       <div class="card-sub" id="municipios-rate-nota" style="margin-top:8px;"></div>
     </div>
+    <div class="card-sub" id="colonias-mtd-nota" style="margin:6px 0 0;"></div>
     <div class="grid-2" style="margin-top:18px;">
       <div class="card" id="card-ranking-colonias">
         <h3>Ranking detallado de colonias</h3>
         <table class="rank-table">
-          <thead><tr><th>Municipio</th><th>Colonia</th><th>Eventos</th><th>%</th></tr></thead>
+          <thead><tr><th>Municipio</th><th>Colonia</th><th>Eventos</th><th>%</th><th>vs. mes ant.</th></tr></thead>
           <tbody id="table-colonias"></tbody>
         </table>
       </div>
       <div class="card" id="card-ranking-sectores">
         <h3>Ranking detallado de sectores</h3>
         <table class="rank-table">
-          <thead><tr><th>Sector</th><th>Eventos</th><th>%</th></tr></thead>
+          <thead><tr><th>Sector</th><th>Eventos</th><th>%</th><th>vs. mes ant.</th></tr></thead>
           <tbody id="table-sectores"></tbody>
         </table>
       </div>
@@ -314,16 +311,18 @@
     <div class="card">
       <div class="map-toolbar">
         <span class="map-stat-pill" id="map-total-stat">Cargando mapa…</span>
-        <div class="pill-toggle" id="map-view-toggle">
-          <button class="pill-toggle-btn active" data-map-view="points">Puntos</button>
-          <button class="pill-toggle-btn" data-map-view="heat">Mapa de calor</button>
-        </div>
       </div>
       <div style="position:relative;">
         <div id="map"></div>
         <div class="map-legend">
           <div><span class="legend-dot" style="background:#2E6DB4;"></span>Sin violencia</div>
           <div><span class="legend-dot" style="background:#F5821F;"></span>Con violencia</div>
+        </div>
+        <div class="map-view-control" id="map-view-control">
+          <div class="map-view-control-title">Vista del mapa</div>
+          <label><input type="radio" name="map-view" value="heat" checked> Mapa de calor</label>
+          <label><input type="radio" name="map-view" value="cluster"> Clusters</label>
+          <label><input type="radio" name="map-view" value="points"> Puntos</label>
         </div>
       </div>
       <div class="map-note">Los filtros globales de la parte superior (delito, año, mes, municipio, violencia) también controlan qué puntos se muestran en este mapa.</div>

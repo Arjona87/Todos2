@@ -240,6 +240,57 @@ function renderHBar(domId, entries, color) {
   });
 }
 
+/* ---------------------- 4b. Top municipios combinado (cifra absoluta + tasa por 100k hab.) ----------------------
+   Doble eje de valores: las dos métricas viven en escalas muy distintas (una
+   cifra absoluta puede ser >100, una tasa normalizada suele ser un número de
+   una o dos cifras) — compartir un solo eje aplastaría visualmente la barra
+   de tasa exactamente para los municipios chicos, que es lo que la tasa
+   busca evitar. Eje inferior = cifra absoluta, eje superior = tasa.
+   ------------------------------------------------------------------------- */
+function renderMunicipiosCombo(topMunicipios, topMunicipiosPorTasa) {
+  const chart = getOrCreateChart("chart-municipios");
+  if (!chart) return;
+
+  const tasaPorNombre = {};
+  topMunicipiosPorTasa.forEach(d => { tasaPorNombre[d.nombre] = d.tasa; });
+
+  // Orden: de mayor a menor por cifra absoluta (criterio confirmado para
+  // esta gráfica), invertido para que el mayor quede arriba en el eje Y.
+  const data = topMunicipios.slice(0, 10).slice().reverse();
+  const labels = data.map(([name]) => toTitle(name));
+  const counts = data.map(([, v]) => v);
+  const tasas = data.map(([name]) => tasaPorNombre[name] ?? null);
+
+  const maxLabelLen = labels.reduce((m, l) => Math.max(m, l.length), 0);
+  const leftMargin = Math.min(260, Math.max(90, Math.round(maxLabelLen * 6.4) + 26));
+
+  applyChartOption("chart-municipios", chart, {
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    legend: {
+      bottom: 0, textStyle: { fontSize: 11.5 },
+      data: ["Eventos (cifra absoluta)", "Tasa por 100k hab."],
+    },
+    grid: { left: leftMargin, right: 24, top: 50, bottom: 40 },
+    xAxis: [
+      { type: "value", position: "bottom", name: "Eventos", nameLocation: "middle", nameGap: 22, nameTextStyle: { fontSize: 10, color: PALETTE.navy }, splitLine: { lineStyle: { color: "#EEF1F4" } } },
+      { type: "value", position: "top", name: "Tasa /100k hab.", nameLocation: "middle", nameGap: 22, nameTextStyle: { fontSize: 10, color: PALETTE.blueLight }, splitLine: { show: false } },
+    ],
+    yAxis: { type: "category", data: labels, axisLabel: { fontSize: 11 } },
+    series: [
+      {
+        name: "Eventos (cifra absoluta)", type: "bar", xAxisIndex: 0, data: counts,
+        barMaxWidth: 11, itemStyle: { color: PALETTE.navy, borderRadius: [0, 3, 3, 0] },
+        label: { show: true, position: "right", fontSize: 10, color: "#4A4F57" },
+      },
+      {
+        name: "Tasa por 100k hab.", type: "bar", xAxisIndex: 1, data: tasas,
+        barMaxWidth: 11, itemStyle: { color: PALETTE.blueLight, borderRadius: [0, 3, 3, 0] },
+        label: { show: true, position: "right", fontSize: 10, color: "#4A4F57", formatter: p => (p.value === null || p.value === undefined) ? "" : p.value },
+      },
+    ],
+  });
+}
+
 /* ---------------------- 5. Heatmap día x franja ---------------------- */
 function renderHeatmapTable(containerId, heatmapData, diasOrden, colorClass) {
   const el = document.getElementById(containerId);
@@ -285,6 +336,6 @@ function toTitle(str){
 window.CGES = window.CGES || {};
 Object.assign(window.CGES, {
   renderMonthlyTrend, renderViolenceDonut, renderModusDonut,
-  renderHBar, renderHeatmapTable, toTitle, PALETTE,
+  renderHBar, renderMunicipiosCombo, renderHeatmapTable, toTitle, PALETTE,
   observeReveal,
 });

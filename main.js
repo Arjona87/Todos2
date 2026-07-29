@@ -8,7 +8,6 @@ const STATE = {
   allRecords: [],
   filtered: [],
   filters: { delito: "all", anio: "all", mes: "all", municipio: "all", violencia: "all" },
-  municipioRateView: "absoluto", // Opción 1: "absoluto" | "tasa" (delitos por 100k hab.)
   source: "live",
 };
 
@@ -127,17 +126,6 @@ function wireFilterEvents() {
       .forEach(id => { const el = document.getElementById(id); if (el) el.value = "all"; });
     renderAll();
   });
-
-  // Opción 1: toggle Cifras absolutas / Tasa por 100k hab. — solo re-renderiza
-  // la gráfica de municipios (no hace falta recalcular todo el dashboard).
-  document.querySelectorAll("#municipios-rate-toggle .pill-toggle-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("#municipios-rate-toggle .pill-toggle-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      STATE.municipioRateView = btn.dataset.rateView;
-      if (STATE.lastAgg) renderMunicipiosChart(STATE.lastAgg);
-    });
-  });
 }
 
 /* ---------------------- Render de KPIs y narrativas ---------------------- */
@@ -210,31 +198,48 @@ function setHtml(id, html) {
 }
 
 /* ---------------------- Tablas de ranking ---------------------- */
-function renderRankTable(tbodyId, entries, total) {
+function fmtDeltaCelda(delta) {
+  if (!delta) return `<span class="kpi-na">Sin dato</span>`;
+  const dir = delta.delta > 0 ? "up" : delta.delta < 0 ? "down" : "flat";
+  const arrow = delta.delta > 0 ? "▲" : delta.delta < 0 ? "▼" : "■";
+  const pctTxt = delta.deltaPct === null ? "" : ` (${delta.deltaPct > 0 ? "+" : ""}${delta.deltaPct}%)`;
+  return `<span class="kpi-delta ${dir}">${arrow} ${delta.delta > 0 ? "+" : ""}${delta.delta}${pctTxt}</span>`;
+}
+
+function renderRankTable(tbodyId, entries, total, comparativoPorClave) {
   const el = document.getElementById(tbodyId);
   if (!el) return;
   const max = entries.length ? entries[0][1] : 1;
-  el.innerHTML = entries.map(([name, value]) => `
+  el.innerHTML = entries.map(([name, value]) => {
+    const delta = comparativoPorClave ? comparativoPorClave[name] : null;
+    return `
     <tr>
       <td class="bar-cell"><div class="bar" style="width:${(value/max*100).toFixed(0)}%"></div><span>${window.CGES.toTitle(name)}</span></td>
       <td>${fmtNum(value)}</td>
       <td>${total ? Math.round(value/total*100) : 0}%</td>
-    </tr>`).join("");
+      <td>${fmtDeltaCelda(delta)}</td>
+    </tr>`;
+  }).join("");
 }
 
 // Tabla de colonias con columna de Municipio en primer lugar, para
 // desambiguar colonias homónimas entre municipios (ej. "Centro").
-function renderColoniasTable(tbodyId, detalle, total) {
+function renderColoniasTable(tbodyId, detalle, total, comparativoPorClave) {
   const el = document.getElementById(tbodyId);
   if (!el) return;
   const max = detalle.length ? detalle[0].count : 1;
-  el.innerHTML = detalle.map(d => `
+  el.innerHTML = detalle.map(d => {
+    const clave = `${d.municipio}|||${d.colonia}`;
+    const delta = comparativoPorClave ? comparativoPorClave[clave] : null;
+    return `
     <tr>
       <td>${window.CGES.toTitle(d.municipio)}</td>
       <td class="bar-cell"><div class="bar" style="width:${(d.count/max*100).toFixed(0)}%"></div><span>${window.CGES.toTitle(d.colonia)}</span></td>
       <td>${fmtNum(d.count)}</td>
       <td>${total ? Math.round(d.count/total*100) : 0}%</td>
-    </tr>`).join("");
+      <td>${fmtDeltaCelda(delta)}</td>
+    </tr>`;
+  }).join("");
 }
 
 /* ---------------------------------------------------------------------
@@ -339,42 +344,84 @@ function updateDelitoDependentSections(agg) {
 // mecanismo de "PLUS +" para que también se sientan vivas al hacer scroll.
 // Opción 1 — Top municipios: cifras absolutas vs. tasa por 100k habitantes.
 // Metodología UNODC/FBI-UCR/INEGI para comparar municipios de distinto tamaño
-// de forma justa. Se expone como función aparte (no solo dentro de renderAll)
-// para poder re-renderizar nada más este bloque cuando el usuario cambia el
-// toggle, sin tener que recalcular todo el dashboard.
+// Combina cifra absoluta + tasa por 100k hab. en una sola gráfica (2 barras
+// por municipio, doble eje). Ver renderMunicipiosCombo() en charts.js para
+// el detalle de por qué se necesita doble eje (unidades muy distintas).
 function renderMunicipiosChart(agg) {
-  if (STATE.municipioRateView === "tasa") {
-    const entries = agg.topMunicipiosPorTasa.slice(0, 10).map(d => [d.nombre, d.tasa]);
-    window.CGES.renderHBar("chart-municipios", entries, window.CGES.PALETTE.blueLight);
-    const sinPoblacion = agg.topMunicipios.length - agg.topMunicipiosPorTasa.length;
-    setHtml("municipios-rate-nota",
-      `Delitos por cada 100,000 habitantes (población: Censo INEGI 2020, vía IIEG Jalisco). ` +
-      `Metodología usada para comparar municipios de distinto tamaño de forma justa (mismo criterio que INEGI/ONU-UNODC).` +
-      (sinPoblacion > 0 ? ` ${sinPoblacion} municipio(s) sin población catalogada no aparecen en esta vista.` : ""));
+  if (typeof window.CGES.renderMunicipiosCombo === "function") {
+    window.CGES.renderMunicipiosCombo(agg.topMunicipios, agg.topMunicipiosPorTasa);
   } else {
-    window.CGES.renderHBar("chart-municipios", agg.topMunicipios, window.CGES.PALETTE.navy);
-    setHtml("municipios-rate-nota", "");
+    // Respaldo si charts.js todavía es una versión anterior (sin la gráfica
+    // combinada) — evita que todo el dashboard truene por un solo archivo
+    // desactualizado; muestra al menos la cifra absoluta.
+    console.warn("window.CGES.renderMunicipiosCombo no existe — charts.js parece ser una versión anterior. Sube el charts.js más reciente.");
+    if (typeof window.CGES.renderHBar === "function") {
+      window.CGES.renderHBar("chart-municipios", agg.topMunicipios, window.CGES.PALETTE.navy);
+    }
   }
+  const sinPoblacion = agg.topMunicipios.length - agg.topMunicipiosPorTasa.length;
+  setHtml("municipios-rate-nota",
+    `<b style="color:var(--navy);">■</b> Cifra absoluta de eventos &nbsp;·&nbsp; <b style="color:${window.CGES.PALETTE.blueLight};">■</b> Tasa por cada 100,000 habitantes ` +
+    `(población: Censo INEGI 2020, vía IIEG Jalisco) — metodología usada para comparar municipios de distinto tamaño de forma justa (mismo criterio que INEGI/ONU-UNODC).` +
+    (sinPoblacion > 0 ? ` ${sinPoblacion} municipio(s) sin población catalogada no muestran barra de tasa.` : ""));
 }
 
 // Opción 4 — Alertas de zonas atípicas (gestión por excepción / control
-// estadístico de procesos). Ver computeAnomalias() en data.js.
+// estadístico de procesos, ver computeAnomalias en data.js) + comparativo
+// mes a mes de los 9 municipios del AMG, ordenado por orden de impacto
+// (magnitud absoluta del cambio en eventos, ver computeComparativoMunicipiosMoM
+// en data.js).
 function updateAnomalias() {
   const result = window.CGES.computeAnomalias(STATE.allRecords, STATE.filters);
+  const comparativo = window.CGES.computeComparativoMunicipiosMoM(STATE.allRecords, STATE.filters);
+  let html = "";
+
   if (!result.disponible) {
-    setHtml("anomalias-lista",
-      `<span class="not-available">Aún no hay suficiente historial mensual por municipio (se necesitan al menos 3 meses previos de datos) para detectar zonas atípicas bajo este filtro — esta sección se poblará automáticamente conforme el Sheet acumule más meses.</span>`);
-    return;
+    html += `<div style="margin-bottom:14px;"><span class="not-available">Aún no hay suficiente historial mensual por municipio (se necesitan al menos 3 meses previos de datos) para detectar zonas estadísticamente atípicas bajo este filtro — esta sección se poblará automáticamente conforme el Sheet acumule más meses.</span></div>`;
+  } else {
+    const periodoTxt = `${window.CGES.toTitle(result.periodoRef.mes)} ${result.periodoRef.anio}`;
+    const rows = result.items.map(it => {
+      const dir = it.z > 0 ? "up" : "down";
+      const arrow = it.z > 0 ? "▲" : "▼";
+      const pct = it.media ? Math.round(((it.actual - it.media) / it.media) * 100) : 0;
+      return `<div style="margin-bottom:6px;"><b>${window.CGES.toTitle(it.municipio)}</b>: ${fmtNum(it.actual)} eventos en ${periodoTxt} — ` +
+        `<span class="kpi-delta ${dir}">${arrow} ${Math.abs(pct)}% sobre su promedio histórico (${it.media})</span></div>`;
+    }).join("");
+    html += `<div style="margin-bottom:6px; color:var(--gray-text); font-size:12.5px;">Detección estadística — período de referencia: <b>${periodoTxt}</b>. Umbral: ±1.5 desviaciones estándar sobre el historial propio de cada municipio.</div>${rows || `<span class="not-available">Ningún municipio se desvía de forma significativa de su historial bajo este filtro.</span>`}`;
   }
-  const periodoTxt = result.periodoRef ? `${window.CGES.toTitle(result.periodoRef.mes)} ${result.periodoRef.anio}` : "";
-  const rows = result.items.map(it => {
-    const dir = it.z > 0 ? "up" : "down";
-    const arrow = it.z > 0 ? "▲" : "▼";
-    const pct = it.media ? Math.round(((it.actual - it.media) / it.media) * 100) : 0;
-    return `<div style="margin-bottom:8px;"><b>${window.CGES.toTitle(it.municipio)}</b>: ${fmtNum(it.actual)} eventos en ${periodoTxt} — ` +
-      `<span class="kpi-delta ${dir}">${arrow} ${Math.abs(pct)}% sobre su promedio histórico (${it.media})</span></div>`;
-  }).join("");
-  setHtml("anomalias-lista", `<div style="margin-bottom:8px; color:var(--gray-text); font-size:12.5px;">Período de referencia: <b>${periodoTxt}</b>. Umbral: ±1.5 desviaciones estándar sobre el historial propio de cada municipio.</div>${rows}`);
+
+  if (comparativo.disponible) {
+    const refTxt = `${window.CGES.toTitle(comparativo.periodoRef.mes)} ${comparativo.periodoRef.anio}`;
+    const prevTxt = `${window.CGES.toTitle(comparativo.periodoAnterior.mes)} ${comparativo.periodoAnterior.anio}`;
+    const filas = comparativo.items.map(it => {
+      const dir = it.delta > 0 ? "up" : it.delta < 0 ? "down" : "flat";
+      const arrow = it.delta > 0 ? "▲" : it.delta < 0 ? "▼" : "■";
+      const pctTxt = it.deltaPct === null ? "" : ` (${it.deltaPct > 0 ? "+" : ""}${it.deltaPct}%)`;
+      return `<div style="display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid var(--gray-card); font-size:13px;">
+        <span><b>${window.CGES.toTitle(it.municipio)}</b></span>
+        <span class="kpi-delta ${dir}">${arrow} ${it.delta > 0 ? "+" : ""}${it.delta}${pctTxt} <span style="color:var(--gray-text); font-weight:400;">(${it.actual} vs ${it.anterior})</span></span>
+      </div>`;
+    }).join("");
+    html += `<div style="margin-top:16px; padding-top:12px; border-top:1px dashed var(--gray-line);">
+      <div style="font-weight:700; color:var(--navy); margin-bottom:6px; font-size:13px;">Comparativo mes a mes por municipio — ${refTxt} vs. ${prevTxt} (orden de impacto)</div>
+      ${filas}
+    </div>`;
+  }
+
+  setHtml("anomalias-lista", html);
+}
+
+// Explica, debajo de "Top municipios", qué criterio se usó para la columna
+// "vs. mes ant." de las tablas de colonias/sectores: mes completo o
+// Month-to-Date (MTD), según lo que realmente exista capturado en el Sheet.
+function renderComparativoDetalladoNota(c) {
+  if (!c.disponible) { setHtml("colonias-mtd-nota", ""); return; }
+  const refTxt = `${window.CGES.toTitle(c.periodoRef.mes)} ${c.periodoRef.anio}`;
+  const prevTxt = `${window.CGES.toTitle(c.periodoAnterior.mes)} ${c.periodoAnterior.anio}`;
+  const metodo = c.esCompleto
+    ? `mes completo (${c.totalDiasRef} días) de <b>${refTxt}</b> vs. mes completo de <b>${prevTxt}</b>`
+    : `primeros <b>${c.corteDia}</b> días de <b>${refTxt}</b> (aún en captura) vs. los primeros ${c.corteDia} días de <b>${prevTxt}</b> — comparación "Month-to-Date"`;
+  setHtml("colonias-mtd-nota", `Columna "vs. mes ant.": ${metodo}.`);
 }
 
 function observeAliveSections() {
@@ -385,32 +432,46 @@ function observeAliveSections() {
   window.CGES.observeReveal(document.getElementById("anomalias-lista"));
 }
 
+// Ejecuta un bloque de render de forma aislada: si truena (ej. por un
+// archivo desactualizado que no trae una función nueva), se registra en
+// consola con nombre del bloque y el dashboard sigue renderizando el resto,
+// en vez de que un solo fallo tumbe toda la página con el mensaje genérico
+// de "no se pudo cargar" (que además era engañoso: no era un problema de
+// datos, sino de una función faltante).
+function safeCall(nombreBloque, fn) {
+  try { fn(); } catch (e) { console.error(`Error renderizando "${nombreBloque}":`, e); }
+}
+
 /* ---------------------- Render general ---------------------- */
 function renderAll() {
   applyFilters();
   const agg = window.CGES.computeAggregates(STATE.filtered);
   STATE.lastAgg = agg;
 
-  renderKPIs(agg);
-  renderInsights(agg);
-  updateAnomalias();
+  safeCall("KPIs", () => renderKPIs(agg));
+  safeCall("Insights narrativos", () => renderInsights(agg));
+  safeCall("Alertas de zonas atípicas", () => updateAnomalias());
 
-  window.CGES.renderMonthlyTrend(agg.monthlyByMunicipio, window.CGES.MESES_ORDEN);
-  window.CGES.renderViolenceDonut(agg.conViolencia, agg.sinViolencia);
-  window.CGES.renderModusDonut(agg.topModus);
-  renderMunicipiosChart(agg);
+  safeCall("Comparativo mensual", () => window.CGES.renderMonthlyTrend(agg.monthlyByMunicipio, window.CGES.MESES_ORDEN));
+  safeCall("Dona de violencia", () => window.CGES.renderViolenceDonut(agg.conViolencia, agg.sinViolencia));
+  safeCall("Dona de modus operandi", () => window.CGES.renderModusDonut(agg.topModus));
+  safeCall("Gráfica de municipios", () => renderMunicipiosChart(agg));
 
-  updateDelitoDependentSections(agg);
+  safeCall("Secciones dependientes del delito", () => updateDelitoDependentSections(agg));
 
-  window.CGES.renderHeatmapTable("heatmap-violencia", agg.heatmapViolencia, window.CGES.DIAS_ORDEN, "orange");
-  window.CGES.renderHeatmapTable("heatmap-sin-violencia", agg.heatmapSinViolencia, window.CGES.DIAS_ORDEN, "blue");
+  safeCall("Heatmap con violencia", () => window.CGES.renderHeatmapTable("heatmap-violencia", agg.heatmapViolencia, window.CGES.DIAS_ORDEN, "orange"));
+  safeCall("Heatmap sin violencia", () => window.CGES.renderHeatmapTable("heatmap-sin-violencia", agg.heatmapSinViolencia, window.CGES.DIAS_ORDEN, "blue"));
 
-  renderColoniasTable("table-colonias", agg.topColoniasDetalle, agg.total);
-  renderRankTable("table-sectores", agg.topSectores, agg.total);
+  safeCall("Tablas de colonias y sectores", () => {
+    const comparativoDetallado = window.CGES.computeComparativoDetallado(STATE.allRecords, STATE.filters);
+    renderComparativoDetalladoNota(comparativoDetallado);
+    renderColoniasTable("table-colonias", agg.topColoniasDetalle, agg.total, comparativoDetallado.porColonia);
+    renderRankTable("table-sectores", agg.topSectores, agg.total, comparativoDetallado.porSector);
+  });
 
-  window.CGES.renderMapMarkers(STATE.filtered);
+  safeCall("Mapa dinámico", () => window.CGES.renderMapMarkers(STATE.filtered));
 
-  observeAliveSections();
+  safeCall("Efecto PLUS+ (reveal)", () => observeAliveSections());
 }
 
 /* ---------------------- Arranque ---------------------- */
@@ -437,8 +498,10 @@ async function boot() {
     renderAll();
   } catch (fatal) {
     statusDot.className = "status-dot err";
-    statusText.textContent = "No fue posible cargar datos (ni en vivo ni de respaldo).";
-    console.error(fatal);
+    statusText.textContent =
+      `Ocurrió un error al iniciar el dashboard: "${fatal && fatal.message ? fatal.message : fatal}". ` +
+      `Esto casi siempre significa que uno de los archivos JS (data.js/charts.js/map.js/main.js) no es la versión más reciente — revisa la consola del navegador (F12 → Console) para ver el detalle completo.`;
+    console.error("Fallo en boot():", fatal);
   } finally {
     overlay.classList.add("hide");
     setTimeout(() => overlay.remove(), 500);
