@@ -1,0 +1,392 @@
+/* =========================================================================
+   ROBO DE VEHÍCULOS AMG — Dashboard CGES
+   Paleta institucional (Coordinación General Estratégica de Seguridad, Jalisco)
+   ========================================================================= */
+
+:root{
+  --navy-dark:#0B1F3A;
+  --navy:#13294B;
+  --navy-soft:#1B3A6B;
+  --blue:#1B4F91;
+  --blue-light:#2E6DB4;
+  --orange:#F5821F;
+  --orange-dark:#E8792D;
+  --gray-bg:#F4F5F7;
+  --gray-card:#E7E9EC;
+  --gray-line:#D8DCE2;
+  --gray-text:#4A4F57;
+  --ink:#1B1F27;
+  --green:#1FA35C;
+  --red:#D64545;
+  --white:#FFFFFF;
+
+  --radius-lg:18px;
+  --radius-md:12px;
+  --radius-sm:8px;
+  --shadow-card:0 4px 18px rgba(11,31,58,.08);
+  --shadow-card-hover:0 8px 28px rgba(11,31,58,.14);
+
+  --font-display:'Montserrat', 'Segoe UI', sans-serif;
+  --font-body:'Inter', 'Segoe UI', sans-serif;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  font-family:var(--font-body);
+  background:var(--gray-bg);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+
+a{color:inherit;}
+img{max-width:100%;display:block;}
+
+.container{
+  max-width:1320px;
+  margin:0 auto;
+  padding:0 24px;
+}
+
+/* ---------- Barra superior de estado / actualización ---------- */
+.status-bar{
+  background:var(--navy-dark);
+  color:#C9D6E8;
+  font-size:12.5px;
+  padding:6px 0;
+  letter-spacing:.2px;
+}
+.status-bar .container{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.status-dot{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:var(--green); margin-right:6px; box-shadow:0 0 0 3px rgba(31,163,92,.25);
+}
+.status-dot.warn{background:var(--orange); box-shadow:0 0 0 3px rgba(245,130,31,.25);}
+.status-dot.err{background:var(--red); box-shadow:0 0 0 3px rgba(214,69,69,.25);}
+
+.plus-toggle{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.35);
+  padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700;
+  letter-spacing:.3px; vertical-align:middle;
+}
+.plus-toggle input{accent-color:var(--orange); cursor:pointer;}
+.plus-toggle span{color:var(--orange);}
+
+/* Efecto "PLUS +": pulso de entrada reutilizable para tarjetas/tablas que no
+   son gráficas de ECharts (KPIs, heatmap, rankings). Se dispara agregando la
+   clase .cges-replay vía JS cada vez que el elemento entra en pantalla
+   (ver observeReveal en charts.js); en reposo no afecta nada (visible normal). */
+@keyframes cgesPulseIn{
+  0%{ opacity:.4; transform:translateY(10px); }
+  100%{ opacity:1; transform:translateY(0); }
+}
+.cges-replay{ animation: cgesPulseIn .55s ease; }
+
+/* Toggle tipo "pill" reutilizable (Opción 1: tasa por 100k hab. / Opción 3: mapa de calor) */
+.pill-toggle{
+  display:inline-flex; gap:2px; background:var(--gray-bg); border:1px solid var(--gray-line);
+  border-radius:999px; padding:3px; margin:10px 0;
+}
+.pill-toggle-btn{
+  border:none; background:transparent; padding:6px 14px; border-radius:999px;
+  font-size:12px; font-weight:600; color:var(--gray-text); cursor:pointer; transition:background .15s, color .15s;
+}
+.pill-toggle-btn.active{ background:var(--navy); color:#fff; }
+.pill-toggle-btn:hover:not(.active){ background:var(--gray-card); }
+
+/* ---------- Header / Portada ---------- */
+header.hero{
+  position:relative;
+  background:var(--white);
+  color:var(--ink);
+  padding:34px 0 40px;
+  overflow:hidden;
+  border-bottom:4px solid var(--orange);
+}
+header.hero::after{
+  content:"";
+  position:absolute; inset:0;
+  background-image:radial-gradient(rgba(19,41,75,.05) 1px, transparent 1.5px);
+  background-size:26px 26px;
+  opacity:.35;
+  pointer-events:none;
+}
+.hero-top{
+  display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap;
+  position:relative; z-index:1;
+}
+header.hero .container{position:relative; padding-right:200px;}
+.brand{display:flex; align-items:center; gap:16px; position:absolute; top:2px; right:24px; z-index:2;}
+.brand img{height:70px; width:auto;}
+.brand-text small{
+  display:block; color:#9FB2CC; font-size:11.5px; letter-spacing:.6px; text-transform:uppercase;
+}
+.hero-title{
+  margin:26px 0 6px; position:relative; z-index:1;
+  font-family:var(--font-display);
+  font-weight:800; font-size:clamp(15px,2.05vw,23px);
+  letter-spacing:.1px;
+  white-space:nowrap;
+  color:var(--blue);
+}
+@media (max-width:760px){
+  .hero-title{white-space:normal; font-size:clamp(20px,5.2vw,26px);}
+}
+.hero-title .accent{color:var(--orange);}
+.hero-sub{
+  position:relative; z-index:1;
+  color:var(--gray-text); font-size:15px; max-width:720px; line-height:1.5;
+}
+@media (max-width:760px){
+  header.hero .container{padding-right:24px;}
+  .brand{position:static; margin-bottom:16px;}
+}
+.hero-controls{
+  position:relative; z-index:1;
+  margin-top:22px; display:flex; gap:14px; flex-wrap:wrap; align-items:center;
+}
+.hero-controls select, .hero-controls .chip{
+  background:var(--gray-bg);
+  border:1px solid var(--gray-line);
+  color:var(--ink);
+  padding:9px 14px;
+  border-radius:999px;
+  font-size:13.5px;
+  font-family:var(--font-body);
+}
+.hero-controls select{cursor:pointer;}
+.hero-controls select option{color:#111;}
+.badge-source{
+  font-size:12px; color:var(--gray-text); display:flex; align-items:center; gap:6px;
+}
+.badge-source b{color:var(--orange);}
+
+/* ---------- Filtros globales (sticky) ---------- */
+.filters-bar{
+  position:sticky; top:0; z-index:50;
+  background:var(--white);
+  border-bottom:1px solid var(--gray-line);
+  box-shadow:0 2px 10px rgba(0,0,0,.05);
+}
+.filters-bar .container{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:10px 24px;
+}
+.filters-bar label{
+  font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--gray-text);
+  display:block; margin-bottom:2px;
+}
+.filter-field{display:flex; flex-direction:column;}
+.filter-field select{
+  border:1px solid var(--gray-line); border-radius:8px; padding:7px 10px;
+  font-family:var(--font-body); font-size:13.5px; color:var(--ink); background:var(--white);
+  min-width:150px;
+}
+.btn-reset{
+  margin-left:auto;
+  background:var(--navy); color:var(--white); border:none;
+  padding:9px 16px; border-radius:8px; font-size:13px; cursor:pointer;
+  transition:background .15s;
+}
+.btn-reset:hover{background:var(--blue);}
+.btn-report{background:var(--orange); margin-left:8px;}
+.btn-report:hover{background:var(--orange-dark);}
+.btn-report:disabled{opacity:.6; cursor:wait;}
+.filter-count{
+  font-size:12.5px; color:var(--gray-text);
+}
+
+/* ---------- Secciones ---------- */
+.section{padding:46px 0 12px;}
+.section-head{
+  position:relative;
+  background:var(--navy);
+  background-image:
+    linear-gradient(120deg, var(--navy-dark), var(--navy) 60%, var(--navy-soft)),
+    repeating-linear-gradient(60deg, rgba(255,255,255,.035) 0 2px, transparent 2px 34px);
+  color:var(--white);
+  border-radius:var(--radius-lg);
+  padding:22px 28px;
+  margin-bottom:22px;
+  border-left:6px solid var(--orange);
+}
+.section-head .eyebrow{
+  font-size:11.5px; letter-spacing:1.2px; text-transform:uppercase; color:var(--orange);
+  font-weight:700; margin-bottom:4px;
+}
+.section-head h2{
+  margin:0; font-family:var(--font-display); font-weight:800;
+  font-size:clamp(20px,2.4vw,28px);
+}
+.section-head p{
+  margin:6px 0 0; color:#C9D6E8; font-size:13.5px; max-width:760px;
+}
+
+/* ---------- Tarjetas KPI ---------- */
+.kpi-grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:16px; margin-bottom:20px;
+}
+.kpi-card{
+  background:var(--white); border-radius:var(--radius-md);
+  padding:18px 18px 16px; box-shadow:var(--shadow-card);
+  border:1px solid var(--gray-card);
+  transition:box-shadow .2s, transform .2s;
+}
+.kpi-card:hover{box-shadow:var(--shadow-card-hover); transform:translateY(-2px);}
+.kpi-icon{
+  width:40px;height:40px;border-radius:50%;
+  background:var(--navy); color:var(--white);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px; margin-bottom:10px;
+}
+.kpi-icon.orange{background:var(--orange);}
+.kpi-icon.green{background:var(--green);}
+.kpi-icon.blue{background:var(--blue-light);}
+.kpi-label{
+  font-size:12px; color:var(--gray-text); text-transform:uppercase; letter-spacing:.4px;
+}
+.kpi-value{
+  font-family:var(--font-display); font-weight:800; font-size:32px; color:var(--navy);
+  line-height:1.1; margin-top:2px;
+}
+.kpi-delta{
+  font-size:12.5px; font-weight:700; margin-top:6px; display:inline-flex; align-items:center; gap:4px;
+}
+.kpi-delta.up{color:var(--red);}
+.kpi-delta.down{color:var(--green);}
+.kpi-delta.flat{color:var(--gray-text);}
+.kpi-na{color:var(--gray-text); font-size:12.5px; font-style:italic;}
+
+/* ---------- Grillas de contenido / gráficas ---------- */
+.grid-2{display:grid; grid-template-columns:1.3fr 1fr; gap:18px;}
+.grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+@media (max-width:920px){
+  .grid-2, .grid-3{grid-template-columns:1fr;}
+}
+
+.card{
+  background:var(--white); border-radius:var(--radius-md);
+  border:1px solid var(--gray-card); box-shadow:var(--shadow-card);
+  padding:18px;
+}
+.card h3{
+  margin:0 0 4px; font-family:var(--font-display); font-size:15.5px; color:var(--navy);
+}
+.card .card-sub{font-size:12px; color:var(--gray-text); margin-bottom:10px;}
+.chart-box{width:100%; height:320px;}
+.chart-box.tall{height:400px;}
+.chart-box.short{height:230px;}
+
+/* ---------- Insight narrativo ---------- */
+.insight{
+  background:#EEF3FA; border:1px solid #D9E4F3; border-left:4px solid var(--blue);
+  border-radius:var(--radius-sm); padding:14px 18px; margin:16px 0 6px;
+  font-size:13.5px; color:#26364F; line-height:1.55;
+}
+.insight b{color:var(--navy);}
+.insight.warn{background:#FFF6EC; border-color:#FBE1C4; border-left-color:var(--orange); color:#5C3E1B;}
+.insight .not-available{color:var(--gray-text); font-style:italic;}
+
+/* ---------- Tablas ---------- */
+table.rank-table{width:100%; border-collapse:collapse; font-size:13px;}
+table.rank-table th{
+  text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+  color:var(--gray-text); padding:6px 8px; border-bottom:2px solid var(--gray-line);
+}
+table.rank-table td{padding:7px 8px; border-bottom:1px solid var(--gray-card);}
+table.rank-table tr:hover td{background:#F8FAFC;}
+.bar-cell{position:relative;}
+.bar-cell .bar{
+  position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,var(--blue),var(--blue-light));
+  border-radius:4px; opacity:.18; z-index:0;
+}
+.bar-cell span{position:relative; z-index:1;}
+
+/* ---------- Heatmap día/hora ---------- */
+.heatmap-wrap{overflow-x:auto;}
+table.heatmap{border-collapse:collapse; font-size:11.5px; width:100%; min-width:520px;}
+table.heatmap th, table.heatmap td{padding:6px 5px; text-align:center; border:1px solid #fff;}
+table.heatmap th{background:var(--navy); color:#fff; font-weight:600; font-size:10.5px;}
+table.heatmap td.label{background:var(--gray-card); font-weight:700; text-align:left; color:var(--navy);}
+table.heatmap td.total{background:var(--navy); color:#fff; font-weight:700;}
+
+/* ---------- Leyenda / chips ---------- */
+.legend-row{display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:12.5px; color:var(--gray-text);}
+.legend-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+
+/* ---------- Mapa ---------- */
+#map-section .card{padding:0; overflow:hidden;}
+#map{width:100%; height:560px;}
+.map-toolbar{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  padding:14px 18px; border-bottom:1px solid var(--gray-card);
+}
+.map-legend{
+  position:absolute; bottom:18px; left:18px; z-index:500;
+  background:rgba(255,255,255,.94); border-radius:10px; padding:10px 14px;
+  font-size:12px; box-shadow:0 4px 14px rgba(0,0,0,.18);
+}
+.map-stat-pill{
+  background:var(--navy); color:#fff; border-radius:999px; padding:6px 14px; font-size:12.5px;
+}
+.map-note{padding:12px 18px; font-size:12px; color:var(--gray-text); border-top:1px solid var(--gray-card);}
+
+/* ---------- Footer ---------- */
+footer{
+  background:var(--navy-dark); color:#B9C6DC; padding:30px 0; margin-top:50px; font-size:12.5px;
+}
+footer .container{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;}
+footer .foot-brand{display:flex; align-items:center; gap:12px;}
+footer .foot-brand img{height:34px; filter:grayscale(1) brightness(2);}
+footer .disclaimer{max-width:640px; line-height:1.5;}
+
+/* ---------- Loader ---------- */
+#loading-overlay{
+  position:fixed; inset:0; background:var(--navy-dark); color:#fff;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999;
+  gap:14px; transition:opacity .4s ease;
+}
+#loading-overlay.hide{opacity:0; pointer-events:none;}
+.spinner{
+  width:44px;height:44px;border-radius:50%;
+  border:4px solid rgba(255,255,255,.2); border-top-color:var(--orange);
+  animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ---------- Menú de descargas ---------- */
+.dl-container{ position:absolute; top:14px; right:16px; z-index:20; }
+.dl-btn{
+  width:32px; height:32px; border-radius:50%;
+  background:rgba(255,255,255,.14); border:1.5px solid rgba(255,255,255,.5);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  transition:background .15s, transform .15s; padding:0;
+}
+.dl-btn:hover{ background:var(--orange); border-color:var(--orange); transform:translateY(-1px); }
+.dl-btn svg{ width:16px; height:16px; display:block; }
+.dl-menu{
+  position:absolute; top:38px; right:0; background:var(--white);
+  border-radius:10px; box-shadow:0 10px 28px rgba(11,31,58,.28);
+  min-width:220px; overflow:hidden; z-index:60; border:1px solid var(--gray-line);
+}
+.dl-option{
+  display:flex; align-items:center; gap:10px; width:100%; padding:10px 14px;
+  border:none; background:var(--white); cursor:pointer; text-align:left;
+  font-size:12.5px; font-family:var(--font-body); color:var(--ink);
+}
+.dl-option:hover{ background:var(--gray-bg); }
+.dl-option .dl-icon{ font-size:15px; width:18px; text-align:center; flex-shrink:0; }
+.dl-option:disabled{ opacity:.45; cursor:not-allowed; }
+
+/* ---------- Utilidades ---------- */
+.text-muted{color:var(--gray-text);}
+.mt-0{margin-top:0;}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
